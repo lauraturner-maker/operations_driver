@@ -42,18 +42,17 @@
             width: 100%;
         }
 
-        .cw-widget {
-            width: min(480px, 96vw);
-            height: min(600px, 96vh);
-            background: var(--bg);
-            border: 2px solid var(--border);
-            border-radius: clamp(8px, 2vw, 16px);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            box-shadow: 0 6px 32px rgba(0,0,0,0.13);
-        }
-
+       .cw-widget {
+    width: min(480px, 96vw);
+    height: 600px;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: clamp(8px, 2vw, 16px);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    box-shadow: 0 6px 32px rgba(0,0,0,0.13);
+}
         /* HEADER — var(--text) renders as the dark slate in light mode (and inverts in dark mode) */
         .cw-widget-header {
             background: var(--text);
@@ -511,9 +510,14 @@
         setInterval(updateClock, 1000);
     }
     init();
+<script>
+    // Notify parent Staffbase iframe to resize to fit this widget
+    function notifyResize() {
+        const height = document.documentElement.scrollHeight;
+        window.parent.postMessage({ type: 'resize', height: height }, '*');
+    }
+    window.addEventListener('load', notifyResize);
 </script>
-<!-- Widget usage counter — see CLAUDE.md -->
-<script>(function(){try{if(location.search.indexOf('preview=1')!==-1)return;var n=location.pathname.split('/').pop();if(!n||n==='index.html')return;var url='https://widget-counter.klauejohann.workers.dev/bump/'+encodeURIComponent(n);if(navigator.sendBeacon)navigator.sendBeacon(url);else fetch(url,{method:'POST',keepalive:true}).catch(function(){});var k='widgetCounts',c=JSON.parse(localStorage.getItem(k)||'{}');c[n]=(c[n]||0)+1;localStorage.setItem(k,JSON.stringify(c));}catch(e){}})();</script>
 </body>
 </html>// Tell the parent Staffbase page to resize the iframe
    window.addEventListener('load', function() {
