@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="widget-name" content="Operations Board">
+    <meta name="widget-description" content="Live shift schedule and production metrics for warehouse floor screens.">
+    <meta name="widget-tags" content="Operations, Scheduling, Logistics">
+    <title>Operations Board</title>
+    <style>
+        :root {
+            --primary: var(--sb-brand, #2563eb);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --text: #1f2937;
+            --text-light: #6b7280;
+            --bg: #ffffff;
+            --bg-gray: #f9fafb;
+            --border: #e5e7eb;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary: var(--sb-brand, #3b9eff);
+                --success: #34d399;
+                --warning: #fbbf24;
+                --danger: #f87171;
+                --text: #f3f4f6;
+                --text-light: #9ca3af;
+                --bg: #1f2937;
+                --bg-gray: #111827;
+                --border: #374151;
+            }
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-gray);
+            color: var(--text);
+            display: flex; align-items: center; justify-content: center;
+            min-height: 100vh;
+            width: 100%;
+        }
+
+        .cw-widget {
+            width: min(480px, 96vw);
+            height: min(600px, 96vh);
+            background: var(--bg);
+            border: 2px solid var(--border);
+            border-radius: clamp(8px, 2vw, 16px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 6px 32px rgba(0,0,0,0.13);
+        }
+
+        /* HEADER — var(--text) renders as the dark slate in light mode (and inverts in dark mode) */
+        .cw-widget-header {
+            background: var(--text);
+            padding: clamp(6px, 1.5vh, 10px) clamp(12px, 3vw, 18px);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            border-bottom: 3px solid var(--primary);
+        }
+        .cw-header-title {
+            font-size: clamp(14px, 4vw, 20px);
+            font-weight: 900; color: var(--bg);
+        }
+        .cw-header-sub {
+            font-size: clamp(9px, 1.8vw, 11px);
+            color: var(--text-light); margin-top: 2px;
+        }
+        .live-badge {
+            display: flex; align-items: center; gap: clamp(4px, 1vw, 6px);
+            background: color-mix(in srgb, var(--success) 18%, transparent);
+            border: 2px solid var(--success);
+            border-radius: 16px; padding: clamp(3px, 0.8vh, 5px) clamp(8px, 2vw, 12px);
+            font-size: clamp(9px, 2vw, 12px); color: var(--success);
+            font-weight: 800; white-space: nowrap; flex-shrink: 0;
+        }
+        .live-dot {
+            width: clamp(6px, 1.5vw, 8px);
+            height: clamp(6px, 1.5vw, 8px);
+            background: var(--success); border-radius: 50%;
+            animation: pulse 1.4s infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+        /* SECTION */
+        .cw-section {
+            padding: clamp(6px, 1.5vh, 10px) clamp(12px, 3vw, 18px);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .cw-section-title {
+            font-size: clamp(8px, 1.8vw, 10px);
+            font-weight: 800; text-transform: uppercase;
+            letter-spacing: 1.5px; color: var(--text-light);
+            margin-bottom: clamp(5px, 1.2vh, 8px);
+            padding-bottom: clamp(4px, 1vh, 6px);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 6px;
+        }
+
+        /* SHIFT */
+        .shift-row {
+            display: flex; align-items: center; justify-content: space-between;
+            background: var(--bg-gray);
+            border-radius: clamp(5px, 1.2vw, 8px);
+            padding: clamp(5px, 1.2vh, 8px) clamp(8px, 2vw, 12px);
+            margin-bottom: clamp(4px, 1vh, 6px);
+            border-left: 5px solid var(--border);
+        }
+        .shift-row:last-child { margin-bottom: 0; }
+        .shift-row.active {
+            border-left-color: var(--success);
+            background: color-mix(in srgb, var(--success) 15%, var(--bg));
+        }
+        .shift-name {
+            font-size: clamp(12px, 3vw, 16px);
+            font-weight: 900; color: var(--text);
+        }
+        .shift-time {
+            font-size: clamp(10px, 2.2vw, 13px);
+            color: var(--primary); font-weight: 600; margin-top: 2px;
+            font-variant-numeric: tabular-nums;
+        }
+        .shift-right { text-align: right; }
+        .shift-super {
+            font-size: clamp(10px, 2vw, 12px); color: var(--text-light);
+        }
+        .shift-badge {
+            display: inline-block;
+            background: var(--success); color: var(--bg);
+            border-radius: 8px;
+            font-size: clamp(8px, 1.8vw, 10px);
+            padding: 2px 10px; font-weight: 800; margin-top: 4px;
+        }
+
+        /* PRODUCTION */
+        .prod-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: clamp(5px, 1.5vw, 8px);
+        }
+        .prod-card {
+            background: var(--bg-gray);
+            border-radius: clamp(6px, 1.5vw, 10px);
+            padding: clamp(7px, 1.5vh, 10px) clamp(8px, 2vw, 12px);
+            border: 1px solid var(--border);
+            border-top: 4px solid var(--border);
+        }
+        .prod-card.accent-success { border-top-color: var(--success); }
+        .prod-card.accent-primary { border-top-color: var(--primary); }
+        .prod-card.accent-warning { border-top-color: var(--warning); }
+        .prod-card.accent-danger  { border-top-color: var(--danger); }
+        .prod-label {
+            font-size: clamp(8px, 1.8vw, 10px);
+            font-weight: 800; text-transform: uppercase;
+            letter-spacing: 1px; color: var(--text-light); margin-bottom: 4px;
+        }
+        .prod-value {
+            font-size: clamp(22px, 5.5vw, 30px);
+            font-weight: 900; color: var(--text); line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+        .prod-unit {
+            font-size: clamp(9px, 1.8vw, 11px);
+            color: var(--text-light); margin-top: 3px;
+        }
+        .prod-delta {
+            font-size: clamp(9px, 1.8vw, 11px);
+            font-weight: 800; margin-top: 3px;
+        }
+        .prod-delta.up   { color: var(--success); }
+        .prod-delta.down { color: var(--danger); }
+        .prod-delta.flat { color: var(--warning); }
+
+        /* FOOTER */
+        .cw-widget-footer {
+            background: var(--bg-gray);
+            border-top: 1px solid var(--border);
+            padding: clamp(5px, 1.2vh, 7px) clamp(12px, 3vw, 18px);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            margin-top: auto;
+        }
+        .cw-footer-src {
+            font-size: clamp(9px, 1.8vw, 11px); color: var(--text-light);
+        }
+        .cw-footer-clock {
+            font-size: clamp(11px, 2.5vw, 14px);
+            color: var(--text); font-weight: 800;
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+</head>
+<body>
+<div class="cw-widget">
+    <div class="cw-widget-header">
+        <div>
+            <div class="cw-header-title" data-i18n="title">Operations Board</div>
+            <div class="cw-header-sub" id="header-date">…</div>
+        </div>
+        <div class="live-badge"><div class="live-dot"></div><span data-i18n="live">LIVE</span></div>
+    </div>
+
+    <div class="cw-section">
+        <div class="cw-section-title">🕐 <span data-i18n="shiftScheduleToday">Shift Schedule · Today</span></div>
+        <div class="shift-row" id="shift-1st">
+            <div>
+                <div class="shift-name" data-i18n="shift1">1st Shift</div>
+                <div class="shift-time" id="shift-time-1"></div>
+            </div>
+            <div class="shift-right"><div class="shift-super"><span data-i18n="supLabel">Sup:</span> Patrick Anderson</div></div>
+        </div>
+        <div class="shift-row" id="shift-2nd">
+            <div>
+                <div class="shift-name" data-i18n="shift2">2nd Shift</div>
+                <div class="shift-time" id="shift-time-2"></div>
+            </div>
+            <div class="shift-right"><div class="shift-super"><span data-i18n="supLabel">Sup:</span> Maya Kumar</div></div>
+        </div>
+        <div class="shift-row" id="shift-3rd">
+            <div>
+                <div class="shift-name" data-i18n="shift3">3rd Shift</div>
+                <div class="shift-time" id="shift-time-3"></div>
+            </div>
+            <div class="shift-right"><div class="shift-super"><span data-i18n="supLabel">Sup:</span> Steven Thompson</div></div>
+        </div>
+    </div>
+
+    <div class="cw-section">
+        <div class="cw-section-title">📦 <span data-i18n="productionCurrentShift">Production · Current Shift</span></div>
+        <div class="prod-grid">
+            <div class="prod-card accent-success">
+                <div class="prod-label" data-i18n="casesPicked">Cases Picked</div>
+                <div class="prod-value" id="cases-value"></div>
+                <div class="prod-unit" id="cases-unit"></div>
+                <div class="prod-delta up" id="cases-delta"></div>
+            </div>
+            <div class="prod-card accent-primary">
+                <div class="prod-label" data-i18n="palletsBuilt">Pallets Built</div>
+                <div class="prod-value" id="pallets-value"></div>
+                <div class="prod-unit" id="pallets-unit"></div>
+                <div class="prod-delta up" id="pallets-delta"></div>
+            </div>
+            <div class="prod-card accent-warning">
+                <div class="prod-label" data-i18n="inboundLoads">Inbound Loads</div>
+                <div class="prod-value" id="inbound-value"></div>
+                <div class="prod-unit" id="inbound-unit"></div>
+                <div class="prod-delta flat" id="inbound-delta"></div>
+            </div>
+            <div class="prod-card accent-danger">
+                <div class="prod-label" data-i18n="outboundLoads">Outbound Loads</div>
+                <div class="prod-value" id="outbound-value"></div>
+                <div class="prod-unit" id="outbound-unit"></div>
+                <div class="prod-delta down" id="outbound-delta"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="cw-widget-footer">
+        <div class="cw-footer-src" data-i18n="footerSrc">WMS · YMS · Equipment Tracker</div>
+        <div class="cw-footer-clock" id="footer-clock"></div>
+    </div>
+</div>
+
+<script>
+    // — Language detection —
+    const LANG = (() => {
+      const l = navigator.language || '';
+      if (l.startsWith('de')) return 'de';
+      if (l.startsWith('fr')) return 'fr';
+      if (l.startsWith('es')) return 'es';
+      if (l.startsWith('ja')) return 'ja';
+      if (l === 'en-GB')      return 'en-GB';
+      return 'en-US';
+    })();
+    document.documentElement.lang = LANG;
+    const LOCALE = {
+      'de': 'de-DE', 'fr': 'fr-FR', 'es': 'es-ES',
+      'ja': 'ja-JP', 'en-GB': 'en-GB', 'en-US': 'en-US'
+    }[LANG];
+    const HOUR12 = LANG === 'en-GB' || LANG === 'en-US';
+
+    // — Translations —
+    const T = {
+        de: {
+            title: 'Betriebsübersicht',
+            live: 'LIVE',
+            shiftScheduleToday: 'Schichtplan · Heute',
+            productionCurrentShift: 'Produktion · Aktuelle Schicht',
+            shift1: '1. Schicht',
+            shift2: '2. Schicht',
+            shift3: '3. Schicht',
+            supLabel: 'Vorges.:',
+            activeNow: '● JETZT AKTIV',
+            casesPicked: 'Kommissioniert',
+            palletsBuilt: 'Paletten gebaut',
+            inboundLoads: 'Eingangsladungen',
+            outboundLoads: 'Ausgangsladungen',
+            ofGoal: 'von ${n} Ziel',
+            ofScheduled: 'von ${n} geplant',
+            toGoal: '${p}% zum Ziel',
+            pending: '${n} ausstehend',
+            delayed: '${n} verspätet',
+            footerSrc: 'WMS · YMS · Equipment-Tracking',
+        },
+        fr: {
+            title: "Tableau d'exploitation",
+            live: 'EN DIRECT',
+            shiftScheduleToday: "Planning des postes · Aujourd'hui",
+            productionCurrentShift: 'Production · Poste actuel',
+            shift1: '1er poste',
+            shift2: '2e poste',
+            shift3: '3e poste',
+            supLabel: 'Resp. :',
+            activeNow: '● ACTIF MAINTENANT',
+            casesPicked: 'Cartons préparés',
+            palletsBuilt: 'Palettes montées',
+            inboundLoads: 'Entrées',
+            outboundLoads: 'Sorties',
+            ofGoal: 'sur ${n} objectif',
+            ofScheduled: 'sur ${n} prévues',
+            toGoal: "${p}% de l'objectif",
+            pending: '${n} en attente',
+            delayed: '${n} en retard',
+            footerSrc: 'WMS · YMS · Suivi équipement',
+        },
+        es: {
+            title: 'Panel de operaciones',
+            live: 'EN VIVO',
+            shiftScheduleToday: 'Horario de turnos · Hoy',
+            productionCurrentShift: 'Producción · Turno actual',
+            shift1: '1.er turno',
+            shift2: '2.º turno',
+            shift3: '3.er turno',
+            supLabel: 'Sup.:',
+            activeNow: '● ACTIVO AHORA',
+            casesPicked: 'Cajas recogidas',
+            palletsBuilt: 'Palés armados',
+            inboundLoads: 'Cargas entrantes',
+            outboundLoads: 'Cargas salientes',
+            ofGoal: 'de ${n} objetivo',
+            ofScheduled: 'de ${n} programadas',
+            toGoal: '${p}% del objetivo',
+            pending: '${n} pendientes',
+            delayed: '${n} retrasadas',
+            footerSrc: 'WMS · YMS · Seguimiento de equipos',
+        },
+        ja: {
+            title: '運用ボード',
+            live: 'ライブ',
+            shiftScheduleToday: 'シフト · 本日',
+            productionCurrentShift: '生産 · 現在のシフト',
+            shift1: '1直',
+            shift2: '2直',
+            shift3: '3直',
+            supLabel: '監督:',
+            activeNow: '● 現在稼働中',
+            casesPicked: 'ケース ピッキング',
+            palletsBuilt: 'パレット組立',
+            inboundLoads: '入荷便',
+            outboundLoads: '出荷便',
+            ofGoal: '目標 ${n} のうち',
+            ofScheduled: '予定 ${n} のうち',
+            toGoal: '目標まで ${p}%',
+            pending: '保留中 ${n} 件',
+            delayed: '遅延 ${n} 件',
+            footerSrc: 'WMS · YMS · 機材トラッキング',
+        },
+        'en-GB': {
+            title: 'Operations Board',
+            live: 'LIVE',
+            shiftScheduleToday: 'Shift Schedule · Today',
+            productionCurrentShift: 'Production · Current Shift',
+            shift1: '1st Shift',
+            shift2: '2nd Shift',
+            shift3: '3rd Shift',
+            supLabel: 'Sup:',
+            activeNow: '● ACTIVE NOW',
+            casesPicked: 'Cases Picked',
+            palletsBuilt: 'Pallets Built',
+            inboundLoads: 'Inbound Loads',
+            outboundLoads: 'Outbound Loads',
+            ofGoal: 'of ${n} goal',
+            ofScheduled: 'of ${n} scheduled',
+            toGoal: '${p}% to goal',
+            pending: '${n} pending',
+            delayed: '${n} delayed',
+            footerSrc: 'WMS · YMS · Equipment Tracker',
+        },
+        'en-US': {
+            title: 'Operations Board',
+            live: 'LIVE',
+            shiftScheduleToday: 'Shift Schedule · Today',
+            productionCurrentShift: 'Production · Current Shift',
+            shift1: '1st Shift',
+            shift2: '2nd Shift',
+            shift3: '3rd Shift',
+            supLabel: 'Sup:',
+            activeNow: '● ACTIVE NOW',
+            casesPicked: 'Cases Picked',
+            palletsBuilt: 'Pallets Built',
+            inboundLoads: 'Inbound Loads',
+            outboundLoads: 'Outbound Loads',
+            ofGoal: 'of ${n} goal',
+            ofScheduled: 'of ${n} scheduled',
+            toGoal: '${p}% to goal',
+            pending: '${n} pending',
+            delayed: '${n} delayed',
+            footerSrc: 'WMS · YMS · Equipment Tracker',
+        },
+    };
+    const t = T[LANG] ?? T['en-US'];
+
+    function tr(key, vars) {
+        let s = t[key] || key;
+        for (const k of Object.keys(vars || {})) {
+            s = s.replace('${' + k + '}', vars[k]);
+        }
+        return s;
+    }
+
+    function applySBBrand() {
+        var sb = getComputedStyle(document.documentElement).getPropertyValue('--sb-brand').trim();
+        if (sb) {
+            document.documentElement.style.setProperty('--primary', sb);
+            return;
+        }
+        try {
+            sb = window.parent.getComputedStyle(window.parent.document.documentElement)
+                    .getPropertyValue('--sb-brand').trim();
+            if (sb) document.documentElement.style.setProperty('--primary', sb);
+        } catch (e) { /* cross-origin, ignore */ }
+    }
+
+    function applyTranslations() {
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.dataset.i18n;
+            if (t[key] !== undefined) el.textContent = t[key];
+        });
+    }
+
+    const numberFormatter = new Intl.NumberFormat(LOCALE);
+    const timeFormatter = new Intl.DateTimeFormat(LOCALE, { hour: 'numeric', minute: '2-digit', hour12: HOUR12 });
+    const clockFormatter = new Intl.DateTimeFormat(LOCALE, { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: HOUR12 });
+    const dateFormatter = new Intl.DateTimeFormat(LOCALE, { weekday: 'long', month: 'long', day: 'numeric' });
+
+    function fmtRange(startH, endH) {
+        const d1 = new Date(); d1.setHours(startH, 0, 0, 0);
+        const d2 = new Date(); d2.setHours(endH, 0, 0, 0);
+        return timeFormatter.format(d1) + ' – ' + timeFormatter.format(d2);
+    }
+
+    function renderShiftTimes() {
+        document.getElementById('shift-time-1').textContent = fmtRange(6, 14);
+        document.getElementById('shift-time-2').textContent = fmtRange(14, 22);
+        document.getElementById('shift-time-3').textContent = fmtRange(22, 6);
+    }
+
+    function renderProduction() {
+        const items = [
+            { idPrefix: 'cases',    value: 3847, goal: 5200, unitKey: 'ofGoal',      deltaPrefix: '▲ ', deltaText: tr('toGoal',  { p: 74 }) },
+            { idPrefix: 'pallets',  value: 112,  goal: 140,  unitKey: 'ofGoal',      deltaPrefix: '▲ ', deltaText: tr('toGoal',  { p: 80 }) },
+            { idPrefix: 'inbound',  value: 8,    goal: 11,   unitKey: 'ofScheduled', deltaPrefix: '● ', deltaText: tr('pending', { n: 3 })  },
+            { idPrefix: 'outbound', value: 6,    goal: 9,    unitKey: 'ofScheduled', deltaPrefix: '▼ ', deltaText: tr('delayed', { n: 2 })  },
+        ];
+        for (const it of items) {
+            document.getElementById(it.idPrefix + '-value').textContent = numberFormatter.format(it.value);
+            document.getElementById(it.idPrefix + '-unit').textContent = tr(it.unitKey, { n: numberFormatter.format(it.goal) });
+            document.getElementById(it.idPrefix + '-delta').textContent = it.deltaPrefix + it.deltaText;
+        }
+    }
+
+    function highlightShift() {
+        const h = new Date().getHours();
+        ['1st','2nd','3rd'].forEach(function(s) {
+            const el = document.getElementById('shift-' + s);
+            el.classList.remove('active');
+            const b = el.querySelector('.shift-badge');
+            if (b) b.remove();
+        });
+        const active = (h >= 6 && h < 14) ? '1st' : (h >= 14 && h < 22) ? '2nd' : '3rd';
+        const el = document.getElementById('shift-' + active);
+        el.classList.add('active');
+        const badge = document.createElement('div');
+        badge.className = 'shift-badge';
+        badge.textContent = t.activeNow;
+        el.querySelector('.shift-right').appendChild(badge);
+    }
+
+    function updateClock() {
+        const now = new Date();
+        document.getElementById('footer-clock').textContent = clockFormatter.format(now);
+        document.getElementById('header-date').textContent = dateFormatter.format(now);
+    }
+
+    function init() {
+        applySBBrand();
+        applyTranslations();
+        renderShiftTimes();
+        renderProduction();
+        highlightShift();
+        updateClock();
+        setInterval(updateClock, 1000);
+    }
+    init();
+</script>
+<!-- Widget usage counter — see CLAUDE.md -->
+<script>(function(){try{if(location.search.indexOf('preview=1')!==-1)return;var n=location.pathname.split('/').pop();if(!n||n==='index.html')return;var url='https://widget-counter.klauejohann.workers.dev/bump/'+encodeURIComponent(n);if(navigator.sendBeacon)navigator.sendBeacon(url);else fetch(url,{method:'POST',keepalive:true}).catch(function(){});var k='widgetCounts',c=JSON.parse(localStorage.getItem(k)||'{}');c[n]=(c[n]||0)+1;localStorage.setItem(k,JSON.stringify(c));}catch(e){}})();</script>
+</body>
+</html>// Tell the parent Staffbase page to resize the iframe
+   window.addEventListener('load', function() {
+     const height = document.body.scrollHeight;
+     window.parent.postMessage({ type: 'resize', height: height }, '*');
+   });
