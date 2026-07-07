@@ -519,8 +519,4 @@
     window.addEventListener('load', notifyResize);
 </script>
 </body>
-</html>// Tell the parent Staffbase page to resize the iframe
-   window.addEventListener('load', function() {
-     const height = document.body.scrollHeight;
-     window.parent.postMessage({ type: 'resize', height: height }, '*');
-   });
+</html>;
